@@ -55,6 +55,7 @@ public sealed partial class ESSanitationEventData
     public Solution Solution { get; set; } = new();
 }
 
+[Serializable, NetSerializable]
 public sealed partial class ESSanitationReleaseGasTimerEvent : ESEntityTimerEvent
 {
     public ESSanitationEventData EventData;
@@ -65,4 +66,5 @@ public sealed partial class ESSanitationReleaseGasTimerEvent : ESEntityTimerEven
     }
 }
 
+[Serializable, NetSerializable]
 public sealed partial class ESSanitationStopGasTimerEvent : ESEntityTimerEvent;
