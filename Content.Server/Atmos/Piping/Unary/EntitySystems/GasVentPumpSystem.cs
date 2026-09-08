@@ -31,7 +31,9 @@ using Robust.Shared.Utility;
 using Robust.Shared.GameObjects;
 
 // ES START
+using Content.Shared._ES.Core.Timer;
 using Content.Shared._ES.Hazmat.Components;
+using Content.Server._ES.Hazmat;
 // ES END
 
 namespace Content.Server.Atmos.Piping.Unary.EntitySystems
@@ -50,6 +52,10 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
         [Dependency] private SharedDoAfterSystem _doAfterSystem = default!;
         [Dependency] private IGameTiming _timing = default!;
         [Dependency] private PowerReceiverSystem _powerReceiverSystem = default!;
+// ES START
+        [Dependency] private ESEntityTimerSystem _entityTimer = default!;
+        [Dependency] private ESSanitationChipSystem _sanitationChip = default!;
+// ES END
         public override void Initialize()
         {
             base.Initialize();
@@ -68,24 +74,10 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
             SubscribeLocalEvent<GasVentPumpComponent, GetVerbsEvent<Verb>>(OnGetVerbs);
             SubscribeLocalEvent<GasVentPumpComponent, VentScrewedDoAfterEvent>(OnVentScrewed);
 // ES START
-            SubscribeLocalEvent<GasVentPumpComponent, ESSanitationChipActivatedEvent>(OnESSanitationChipActivatedEvent);
-            SubscribeLocalEvent<GasVentPumpComponent, ESSanitationChipFinishedEvent>(OnESSanitationChipFinishedEvent);
-        }
-
-        private void OnESSanitationChipActivatedEvent(EntityUid uid, GasVentPumpComponent vent, ref ESSanitationChipActivatedEvent args)
-        {
-            AddComp<ESVentAffectedBySanitationChipComponent>(uid);
-            Log.Debug("SanitationChip! We have changed the state of the vent!");
-            UpdateState(uid, vent);
-        }
-
-        private void OnESSanitationChipFinishedEvent(EntityUid uid, GasVentPumpComponent vent, ref ESSanitationChipFinishedEvent args)
-        {
-            RemComp<ESVentAffectedBySanitationChipComponent>(uid);
-            Log.Debug("SanitationChip! We have finished changing the state of the vent!");
-            UpdateState(uid, vent);
-        }
+            SubscribeLocalEvent<GasVentPumpComponent, ESSanitationReleaseGasTimerEvent>(OnReleaseGasEvent);
+            SubscribeLocalEvent<GasVentPumpComponent, ESSanitationStopGasTimerEvent>(OnStopGasEvent);
 // ES END
+        }
 
         private void OnGasVentPumpUpdated(EntityUid uid, GasVentPumpComponent vent, ref AtmosDeviceUpdateEvent args)
         {
@@ -185,7 +177,7 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
 
                 if ((vent.PressureChecks & VentPressureBound.InternalBound) != 0)
                     pressureDelta = MathF.Min(pressureDelta, vent.InternalPressureBound - pipe.Air.Pressure);
-Log.Debug("Sanitation Chip! This vent is welded shut.");
+
                 if (pressureDelta <= 0)
                     return;
 
@@ -211,7 +203,7 @@ Log.Debug("Sanitation Chip! This vent is welded shut.");
         }
 
         private void OnGasVentPumpLeaveAtmosphere(EntityUid uid, GasVentPumpComponent component, ref AtmosDeviceDisabledEvent args)
-        {Log.Debug("Sanitation Chip! This vent is welded shut.");
+        {
             UpdateState(uid, component);
         }
 
@@ -302,8 +294,44 @@ Log.Debug("Sanitation Chip! This vent is welded shut.");
                     UpdateState(uid, component);
 
                     return;
+// ES START
+                case ESSanitationChipSystem.Prepare:
+                    if (!args.Data.TryGetValue(ESSanitationChipSystem.Prepare, out ESSanitationEventData? prepareData))
+                    {
+                        break;
+                    }
+                    AddComp<ESVentAffectedBySanitationChipComponent>(uid);
+                    UpdateState(uid, component);
+                    _entityTimer.SpawnTimer(uid,
+                        prepareData.TimeUntilGasSpawn,
+                        new ESSanitationReleaseGasTimerEvent(prepareData), logFailure: true);
+                    return;
             }
         }
+
+        private void OnReleaseGasEvent(Entity<GasVentPumpComponent> ent, ref ESSanitationReleaseGasTimerEvent args)
+        {
+            if (_weldable.IsWelded(ent.Owner))
+                return;
+            else if (!_powerReceiverSystem.IsPowered(ent.Owner) || !ent.Comp.Enabled)
+                return;
+            if (!HasComp<ESVentAffectedBySanitationChipComponent>(ent.Owner))
+            {
+                AddComp<ESVentAffectedBySanitationChipComponent>(ent.Owner);
+            }
+            UpdateState(ent.Owner, ent.Comp);
+            _sanitationChip.ReleaseGasFromTarget(ent.Owner, args.EventData);
+            _ = _entityTimer.SpawnTimer(ent,
+                args.EventData.Duration,
+                new ESSanitationStopGasTimerEvent());
+        }
+
+        private void OnStopGasEvent(Entity<GasVentPumpComponent> ent, ref ESSanitationStopGasTimerEvent args)
+        {
+            RemComp<ESVentAffectedBySanitationChipComponent>(ent.Owner);
+            UpdateState(ent.Owner, ent.Comp);
+        }
+// ES END
 
         private void OnInit(EntityUid uid, GasVentPumpComponent component, ComponentInit args)
         {
@@ -349,7 +377,7 @@ Log.Debug("Sanitation Chip! This vent is welded shut.");
                 _appearance.SetData(uid, VentPumpVisuals.State, VentPumpState.Off, appearance);
             }
 // ES START
-            else if (TryComp<ESVentAffectedBySanitationChipComponent>(uid, out var component))
+            else if (HasComp<ESVentAffectedBySanitationChipComponent>(uid))
             {
                 _appearance.SetData(uid, VentPumpVisuals.State, VentPumpState.Cleaning, appearance);
             }

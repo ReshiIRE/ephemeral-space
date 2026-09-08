@@ -17,7 +17,7 @@
     timeUntilGasSpawn: 15
     duration: 30
     spreadAmount: 200
-    smokePrototype: RemoveGasFoam
+    smokePrototype: FoamSterilization
     solution:
       reagents:
       - ReagentId: SanitizationFoam

@@ -22,6 +22,8 @@
         damage:
           types:
             Caustic: 0.2
+        # commented out as we were running into an issue where, when wearing the biosuit (that resists acidic damage)
+        # we would still get this message, constantly
 #      - !type:PopupMessage
 #        type: Local
 #        visualType: Large
@@ -30,6 +32,6 @@
 
 - type: entity
   parent: Foam
-  id: RemoveGasFoam
+  id: FoamSterilization
   components:
     - type: ESRemoveGas

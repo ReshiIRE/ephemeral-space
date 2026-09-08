@@ -1,17 +1,15 @@
 using Content.Shared.Atmos;
 using Robust.Shared.GameStates;
-using Content.Shared._ES.Hazmat;
+using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom;
 
 namespace Content.Shared._ES.Hazmat.Components;
 
 // Allows entity to remove the gasses specified
 [RegisterComponent, NetworkedComponent]
-[AutoGenerateComponentState, AutoGenerateComponentPause]
-[Access(typeof(ESSharedRemoveGasSystem))]
+[AutoGenerateComponentState]
 public sealed partial class ESRemoveGasComponent : Component
 {
-    [DataField]
-    [AutoNetworkedField, AutoPausedField]
+    [DataField(customTypeSerializer: typeof(TimeOffsetSerializer))]
     public TimeSpan NextClean = TimeSpan.Zero;
 
     [DataField]

@@ -97,6 +97,7 @@
 - type: entity
   parent: SmokeGrenade
   id: SanitizerGrenade
+  suffix: DEBUG
   name: sterilnade
   description: Sanitizaton foam grenade. Not intended for mapping, testing purposes only.
   components:
@@ -107,7 +108,7 @@
     - timer
     duration: 15
     spreadAmount: 50
-    smokePrototype: RemoveGasFoam
+    smokePrototype: FoamSterilization
     solution:
       reagents:
       - ReagentId: SanitizationFoam

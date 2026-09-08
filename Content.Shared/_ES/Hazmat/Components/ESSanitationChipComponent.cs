@@ -2,8 +2,9 @@ using Robust.Shared.GameStates;
 using Robust.Shared.Serialization;
 using Robust.Shared.Prototypes;
 using Content.Shared.DoAfter;
-using Content.Shared._ES.Hazmat;
 using Content.Shared.Chemistry.Components;
+using Content.Shared._ES.Hazmat;
+using Content.Shared._ES.Core.Timer.Components;
 
 namespace Content.Shared._ES.Hazmat.Components;
 
@@ -27,7 +28,7 @@ public sealed partial class ESSanitationChipComponent : Component
     public int SpreadAmount;
 
     [DataField, AutoNetworkedField]
-    public EntProtoId SmokePrototype = "RemoveGasFoam";
+    public EntProtoId<SmokeComponent> SmokePrototype = "FoamSterilization";
 
     [DataField, AutoNetworkedField]
     public Solution Solution = new();
@@ -40,8 +41,28 @@ public sealed partial class ESVentAffectedBySanitationChipComponent : Component 
 [Serializable, NetSerializable]
 public sealed partial class ESSanitationChipDoAfterEvent : SimpleDoAfterEvent;
 
-[ByRefEvent]
-public readonly record struct ESSanitationChipActivatedEvent;
+[Serializable, NetSerializable]
+public sealed partial class ESSanitationEventData
+{
+    public TimeSpan TimeUntilGasSpawn;
 
-[ByRefEvent]
-public readonly record struct ESSanitationChipFinishedEvent;
+    public TimeSpan Duration { get; set; }
+
+    public int SpreadAmount { get; set; }
+
+    public EntProtoId<SmokeComponent> SmokePrototype { get; set; }
+
+    public Solution Solution { get; set; } = new();
+}
+
+public sealed partial class ESSanitationReleaseGasTimerEvent : ESEntityTimerEvent
+{
+    public ESSanitationEventData EventData;
+
+    public ESSanitationReleaseGasTimerEvent(ESSanitationEventData data)
+    {
+        EventData = data;
+    }
+}
+
+public sealed partial class ESSanitationStopGasTimerEvent : ESEntityTimerEvent;

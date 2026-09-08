@@ -3,6 +3,11 @@ using Content.Server.DeviceNetwork.Systems;
 using Content.Shared.Atmos.Monitor.Components;
 using Content.Shared.DeviceNetwork;
 
+// ES START
+using Content.Server._ES.Hazmat;
+using Content.Shared._ES.Hazmat.Components;
+// ES END
+
 namespace Content.Server.Atmos.Monitor.Systems;
 
 /// <summary>
@@ -68,4 +73,17 @@ public sealed partial class AtmosDeviceNetworkSystem : EntitySystem
 
         _deviceNet.QueuePacket(uid, address, payload);
     }
+
+// ES START
+    public void SanitationPrepare(EntityUid uid, string address, ESSanitationEventData data)
+    {
+        var payload = new NetworkPayload()
+        {
+            [DeviceNetworkConstants.Command] = ESSanitationChipSystem.Prepare,
+            [ESSanitationChipSystem.Prepare] = data
+        };
+
+        _deviceNet.QueuePacket(uid, address, payload);
+    }
+// ES END
 }
