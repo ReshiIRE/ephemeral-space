@@ -1,1 +1,1 @@
-es-generic-reagent-effect-blistering-skin = You feel the surface of your skin blister.
+es-generic-reagent-effect-blistering-skin = I feel my skin blistering!

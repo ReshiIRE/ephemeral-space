@@ -1,6 +1,5 @@
 using Content.Shared.Chemistry.Components;
 using Content.Shared.Coordinates.Helpers;
-using Content.Shared.DoAfter;
 using Content.Shared.Timing;
 using Content.Shared.IdentityManagement;
 using Content.Shared.Interaction;
@@ -89,10 +88,10 @@ public sealed partial class ESSanitationChipSystem : ESSharedSanitationChipSyste
         if (args.Cancelled || args.Handled || args.Args.Target == null)
             return;
 
-        args.Handled |= TryUseSanitationChip(chip, args.Args.User, args.Args.Target.Value);
+        args.Handled |= TryUseSanitationChip(chip, args.Args.Target.Value);
     }
 
-    private bool TryUseSanitationChip(Entity<ESSanitationChipComponent> chip, EntityUid user, EntityUid target)
+    private bool TryUseSanitationChip(Entity<ESSanitationChipComponent> chip, EntityUid target)
     {
         if (!_charges.TryUseCharge(chip.Owner))
             return false;

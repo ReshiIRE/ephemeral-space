@@ -34,6 +34,7 @@ public abstract partial class ESSharedSanitationChipSystem : EntitySystem
         if (args.Handled || !args.CanReach || args.Target is not { Valid: true } target)
             return;
 
+        // using tags as component is only available on the server
         if (_tag.HasTag(target, AirAlarmTag))
             args.Handled |= TryDoSanitationChipDoAfter(chip, args.User, target);
     }
