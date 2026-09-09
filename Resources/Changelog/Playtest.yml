@@ -2142,3 +2142,11 @@ Entries:
         context.
   id: 232
   time: '2026-09-09T14:42:10.0000000+00:00'
+- author: ReshiIRE
+  changes:
+    - type: Add
+      message: >-
+        The Sanitation Override Chip is now available to the Janitor in their
+        locker for when a room needs a really deep clean.
+  id: 233
+  time: '2026-09-09T15:14:08.0000000+00:00'
