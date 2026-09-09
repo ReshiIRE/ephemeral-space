@@ -14,7 +14,6 @@ using Content.Server.Decals;
 using System.Numerics;
 using Robust.Shared.Timing;
 using Content.Shared.Atmos;
-
 using Content.Shared._ES.Hazmat.Components;
 
 namespace Content.Server._ES.Hazmat;

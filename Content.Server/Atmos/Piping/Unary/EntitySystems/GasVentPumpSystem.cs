@@ -28,9 +28,8 @@ using Content.Shared.Verbs;
 using JetBrains.Annotations;
 using Robust.Shared.Timing;
 using Robust.Shared.Utility;
-using Robust.Shared.GameObjects;
-
 // ES START
+using Robust.Shared.GameObjects;
 using Content.Shared._ES.Core.Timer;
 using Content.Shared._ES.Hazmat.Components;
 using Content.Server._ES.Hazmat;
