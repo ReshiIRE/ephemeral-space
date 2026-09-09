@@ -44,11 +44,6 @@ public sealed partial class ESRemoveGasSystem : EntitySystem
             if (removeGas.NextClean > _timing.CurTime)
                 continue;
 
-            if (transform == null)
-            {
-                Log.Error("RemoveGas! Grid or transform component not found.");
-                continue;
-            }
             if (_atmosphere.GetTileMixture((uid, transform), true) is { } environment)
             {
                 Scrub(frameTime, removeGas, environment);

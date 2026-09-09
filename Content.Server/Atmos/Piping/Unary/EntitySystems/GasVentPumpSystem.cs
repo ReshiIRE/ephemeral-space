@@ -314,10 +314,7 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
                 return;
             else if (!_powerReceiverSystem.IsPowered(ent.Owner) || !ent.Comp.Enabled)
                 return;
-            if (!HasComp<ESVentAffectedBySanitationChipComponent>(ent.Owner))
-            {
-                AddComp<ESVentAffectedBySanitationChipComponent>(ent.Owner);
-            }
+            EnsureComp<ESVentAffectedBySanitationChipComponent>(ent);
             UpdateState(ent.Owner, ent.Comp);
             _sanitationChip.ReleaseGasFromTarget(ent.Owner, args.EventData);
             _ = _entityTimer.SpawnTimer(ent,

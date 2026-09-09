@@ -49,6 +49,7 @@ public sealed partial class ESSanitationChipSystem : ESSharedSanitationChipSyste
     [Dependency] private AtmosDeviceNetworkSystem _atmosDeviceNetwork = default!;
     [Dependency] private ESEntityTimerSystem _entityTimer = default!;
 
+    // DeviceNetPacket Key
     public const string Prepare = "sanitation_system_prepare_gas";
 
     public override void Initialize()
@@ -60,9 +61,7 @@ public sealed partial class ESSanitationChipSystem : ESSharedSanitationChipSyste
     // API
     public void ReleaseGasFromTarget(EntityUid target, ESSanitationEventData args)
     {
-        var xform = CompOrNull<TransformComponent>(target);
-        if (xform == null)
-            return;
+        var xform = Transform(target);
 
         // then spawn the foam out of those vents locations
         var mapCoords = _transform.GetMapCoordinates(target, xform);
