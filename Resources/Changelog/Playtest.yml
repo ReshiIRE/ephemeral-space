@@ -2130,3 +2130,15 @@ Entries:
         character menu.
   id: 231
   time: '2026-09-05T22:41:20.0000000+00:00'
+- author: EmoGarbage404
+  changes:
+    - type: Add
+      message: >-
+        Left-clicking on things when in combat mode now shoves them, knocking
+        them back a small distance, staggering them, and disrupting their aim.
+    - type: Tweak
+      message: >-
+        Wideswing and normal attack are now both on right click, and depend on
+        context.
+  id: 232
+  time: '2026-09-09T14:42:10.0000000+00:00'
