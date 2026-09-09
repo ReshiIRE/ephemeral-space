@@ -28,6 +28,12 @@ using Content.Shared.Verbs;
 using JetBrains.Annotations;
 using Robust.Shared.Timing;
 using Robust.Shared.Utility;
+// ES START
+using Robust.Shared.GameObjects;
+using Content.Shared._ES.Core.Timer;
+using Content.Shared._ES.Hazmat.Components;
+using Content.Server._ES.Hazmat;
+// ES END
 
 namespace Content.Server.Atmos.Piping.Unary.EntitySystems
 {
@@ -45,6 +51,10 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
         [Dependency] private SharedDoAfterSystem _doAfterSystem = default!;
         [Dependency] private IGameTiming _timing = default!;
         [Dependency] private PowerReceiverSystem _powerReceiverSystem = default!;
+// ES START
+        [Dependency] private ESEntityTimerSystem _entityTimer = default!;
+        [Dependency] private ESSanitationChipSystem _sanitationChip = default!;
+// ES END
         public override void Initialize()
         {
             base.Initialize();
@@ -62,6 +72,10 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
             SubscribeLocalEvent<GasVentPumpComponent, WeldableChangedEvent>(OnWeldChanged);
             SubscribeLocalEvent<GasVentPumpComponent, GetVerbsEvent<Verb>>(OnGetVerbs);
             SubscribeLocalEvent<GasVentPumpComponent, VentScrewedDoAfterEvent>(OnVentScrewed);
+// ES START
+            SubscribeLocalEvent<GasVentPumpComponent, ESSanitationReleaseGasTimerEvent>(OnReleaseGasEvent);
+            SubscribeLocalEvent<GasVentPumpComponent, ESSanitationStopGasTimerEvent>(OnStopGasEvent);
+// ES END
         }
 
         private void OnGasVentPumpUpdated(EntityUid uid, GasVentPumpComponent vent, ref AtmosDeviceUpdateEvent args)
@@ -279,8 +293,41 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
                     UpdateState(uid, component);
 
                     return;
+// ES START
+                case ESSanitationChipSystem.Prepare:
+                    if (!args.Data.TryGetValue(ESSanitationChipSystem.Prepare, out ESSanitationEventData? prepareData))
+                    {
+                        break;
+                    }
+                    AddComp<ESVentAffectedBySanitationChipComponent>(uid);
+                    UpdateState(uid, component);
+                    _entityTimer.SpawnTimer(uid,
+                        prepareData.TimeUntilGasSpawn,
+                        new ESSanitationReleaseGasTimerEvent(prepareData), logFailure: true);
+                    return;
             }
         }
+
+        private void OnReleaseGasEvent(Entity<GasVentPumpComponent> ent, ref ESSanitationReleaseGasTimerEvent args)
+        {
+            if (_weldable.IsWelded(ent.Owner))
+                return;
+            else if (!_powerReceiverSystem.IsPowered(ent.Owner) || !ent.Comp.Enabled)
+                return;
+            EnsureComp<ESVentAffectedBySanitationChipComponent>(ent);
+            UpdateState(ent.Owner, ent.Comp);
+            _sanitationChip.ReleaseGasFromTarget(ent.Owner, args.EventData);
+            _ = _entityTimer.SpawnTimer(ent,
+                args.EventData.Duration,
+                new ESSanitationStopGasTimerEvent());
+        }
+
+        private void OnStopGasEvent(Entity<GasVentPumpComponent> ent, ref ESSanitationStopGasTimerEvent args)
+        {
+            RemComp<ESVentAffectedBySanitationChipComponent>(ent.Owner);
+            UpdateState(ent.Owner, ent.Comp);
+        }
+// ES END
 
         private void OnInit(EntityUid uid, GasVentPumpComponent component, ComponentInit args)
         {
@@ -325,6 +372,12 @@ namespace Content.Server.Atmos.Piping.Unary.EntitySystems
                 _ambientSoundSystem.SetAmbience(uid, false);
                 _appearance.SetData(uid, VentPumpVisuals.State, VentPumpState.Off, appearance);
             }
+// ES START
+            else if (HasComp<ESVentAffectedBySanitationChipComponent>(uid))
+            {
+                _appearance.SetData(uid, VentPumpVisuals.State, VentPumpState.Cleaning, appearance);
+            }
+// ES END
             else if (vent.PumpDirection == VentPumpDirection.Releasing)
             {
                 if (vent.UnderPressureLockout & !vent.PressureLockoutOverride & !vent.IsPressureLockoutManuallyDisabled)
