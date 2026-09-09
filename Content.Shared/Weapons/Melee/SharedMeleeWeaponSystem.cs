@@ -26,6 +26,7 @@ using Content.Shared.Mobs.Systems;
 using Content.Shared.Physics;
 using Content.Shared.Popups;
 using Content.Shared.StatusEffect;
+using Content.Shared.Throwing;
 using Content.Shared.Weapons.Melee.Components;
 using Content.Shared.Weapons.Melee.Events;
 using Content.Shared.Weapons.Ranged.Components;
@@ -36,6 +37,7 @@ using Robust.Shared.Audio.Systems;
 using Robust.Shared.Map;
 using Robust.Shared.Network;
 using Robust.Shared.Physics;
+using Robust.Shared.Physics.Components;
 using Robust.Shared.Physics.Systems;
 using Robust.Shared.Player;
 using Robust.Shared.Prototypes;
@@ -69,10 +71,13 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
     // ES START
     [Dependency] private ESScreenshakeSystem _shake = default!;
     [Dependency] private StatusEffectNew.StatusEffectsSystem _status = default!;
+    [Dependency] private ThrowingSystem _throwing = default!;
     // ES END
 
     private static readonly EntProtoId MeleeAttackSlowStatusEffect = "ESMeleeTemporarySlowdownAttack";
     private static readonly EntProtoId MeleeDamageSlowStatusEffect = "ESMeleeTemporarySlowdownDamage";
+    private static readonly EntProtoId ShoveStatusEffect = "ESMeleeShoveSlowdown";
+    private static readonly TimeSpan ShoveStatusDuration = TimeSpan.FromSeconds(1.0f);
 
     private const int AttackMask = (int) (CollisionGroup.MobMask | CollisionGroup.Opaque);
 
@@ -103,6 +108,7 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
         SubscribeAllEvent<HeavyAttackEvent>(OnHeavyAttack);
         SubscribeAllEvent<LightAttackEvent>(OnLightAttack);
         SubscribeAllEvent<DisarmAttackEvent>(OnDisarmAttack);
+        SubscribeAllEvent<ShoveAttackEvent>(OnShoveAttack);
         SubscribeAllEvent<StopAttackEvent>(OnStopAttack);
 
 #if DEBUG
@@ -244,6 +250,17 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
 
         if (TryGetWeapon(user, out var weaponUid, out var weapon))
             AttemptAttack(user, weaponUid, weapon, msg, args.SenderSession);
+    }
+
+    private void OnShoveAttack(ShoveAttackEvent msg, EntitySessionEventArgs args)
+    {
+        if (args.SenderSession.AttachedEntity is not {} user)
+            return;
+
+        if (!TryComp<MeleeWeaponComponent>(user, out var weapon))
+            return;
+
+        AttemptAttack(user, user, weapon, msg, args.SenderSession);
     }
 
     /// <summary>
@@ -399,6 +416,7 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
         if (!CombatMode.IsInCombatMode(user))
             return false;
 
+        var fireRate = TimeSpan.FromSeconds(1f / GetAttackRate(weaponUid, user, weapon));
         EntityUid? target = null;
         switch (attack)
         {
@@ -427,6 +445,21 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
                 if (!Blocker.CanAttack(user, target, (weaponUid, weapon), true))
                     return false;
                 break;
+            case ShoveAttackEvent shove:
+                if (shove.Target != null && !TryGetEntity(shove.Target, out target))
+                {
+                    // Target was lightly attacked & deleted.
+                    return false;
+                }
+
+                // Cannot shove yourself
+                if (target == user)
+                    return false;
+
+                if (!Blocker.CanAttack(user, target, (weaponUid, weapon), true))
+                    return false;
+                fireRate = weapon.ShoveDelay;
+                break;
             default:
                 if (!Blocker.CanAttack(user, weapon: (weaponUid, weapon)))
                     return false;
@@ -434,7 +467,6 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
         }
 
         // Windup time checked elsewhere.
-        var fireRate = TimeSpan.FromSeconds(1f / GetAttackRate(weaponUid, user, weapon));
         var swings = 0;
 
         // TODO: If we get autoattacks then probably need a shotcounter like guns so we can do timing properly.
@@ -482,6 +514,12 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
                     break;
                 case DisarmAttackEvent disarm:
                     if (!DoDisarm(user, disarm, weaponUid, weapon, session))
+                        return false;
+
+                    animation = weapon.Animation;
+                    break;
+                case ShoveAttackEvent shove:
+                    if (!DoShove(user, shove, weaponUid, weapon, session))
                         return false;
 
                     animation = weapon.Animation;
@@ -995,6 +1033,70 @@ public abstract partial class SharedMeleeWeaponSystem : EntitySystem
             PopupSystem.PopupCursor(Loc.GetString("stunned-component-disarm-success", ("target", targetEnt)), user, PopupType.Large);
 
             AdminLogger.Add(LogType.DisarmedKnockdown, LogImpact.Medium, $"{ToPrettyString(user):user} knocked down {ToPrettyString(target):target}");
+        }
+
+        return true;
+    }
+
+    private bool DoShove(EntityUid user, ShoveAttackEvent ev, EntityUid meleeUid, MeleeWeaponComponent component, ICommonSession? session)
+    {
+        var target = GetEntity(ev.Target);
+
+        if (Deleted(target) || user == target)
+            return false;
+
+        if (MobState.IsIncapacitated(target.Value))
+            return false;
+
+        if (!TryComp<PhysicsComponent>(target, out var body) || body.BodyType == BodyType.Static)
+            return false;
+
+        if (!InRange(user, target.Value, component.Range, session))
+        {
+            return false;
+        }
+
+        // At this point we diverge
+        if (_netMan.IsClient)
+        {
+            // Play a sound to give instant feedback; same with playing the animations
+            _meleeSound.PlaySwingSound(user, meleeUid, component);
+            return true;
+        }
+
+        Interaction.DoContactInteraction(user, target, null, true); // Stellar - Interaction particles
+        AdminLogger.Add(LogType.DisarmedAction, $"{ToPrettyString(user):user} shoved {ToPrettyString(target):target}");
+
+        var targetPos = TransformSystem.GetWorldPosition(target.Value);
+        var userPos = TransformSystem.GetWorldPosition(user);
+        var dir = targetPos != userPos ? (targetPos - userPos).Normalized() : Vector2.Zero;
+
+        _throwing.TryThrow(
+            target.Value,
+            dir,
+            10f,
+            user,
+            compensateFriction: true,
+            animated: false,
+            playSound: false,
+            doSpin: false);
+        _status.TrySetStatusEffectDuration(target.Value, ShoveStatusEffect, ShoveStatusDuration);
+
+        var targetEnt = Identity.Entity(target.Value, EntityManager);
+        var userEnt = Identity.Entity(user, EntityManager);
+
+        var msgOther = Loc.GetString(
+            "disarm-action-shove-popup-message-other-clients",
+            ("performerName", userEnt),
+            ("targetName", targetEnt));
+
+        var msgUser = Loc.GetString("disarm-action-shove-popup-message-cursor", ("targetName", targetEnt));
+        PopupSystem.PopupEntity(msgUser, msgOther, target.Value, user);
+
+        if (TryGetWeapon(user, out var heldWeapon, out var heldWeaponComponent))
+        {
+            heldWeaponComponent.NextAttack = Timing.CurTime + TimeSpan.FromSeconds(1f / GetAttackRate(heldWeapon, user, heldWeaponComponent));
+            DirtyField(heldWeapon, heldWeaponComponent, nameof(MeleeWeaponComponent.NextAttack));
         }
 
         return true;
